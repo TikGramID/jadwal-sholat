@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jadwal Sholat Digital | Sarid Syahrinal</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* --- GAYA DASAR --- */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: 'Poppins', sans-serif; 
+            background: linear-gradient(135deg, #0f2027, #203a43, #2c5364); /* Tema Gelap Elegan */
+            color: white; 
+            min-height: 100vh; 
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            padding: 20px;
+        }
+
+        /* --- CONTAINER UTAMA --- */
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 20px;
+            padding: 30px;
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+
+        /* --- HEADER & JAM --- */
+        h1 { font-size: 1.2rem; margin-bottom: 5px; color: #4ade80; text-transform: uppercase; letter-spacing: 2px; }
+        .location { font-size: 0.9rem; color: #ccc; margin-bottom: 20px; display: flex; justify-content: center; align-items: center; gap: 5px; }
+        
+        .realtime-clock {
+            font-size: 3.5rem; font-weight: 700; margin: 10px 0;
+            text-shadow: 0 0 20px rgba(74, 222, 128, 0.5);
+        }
+        .date-box { font-size: 0.9rem; color: #ddd; margin-bottom: 30px; background: rgba(0,0,0,0.3); padding: 5px 15px; border-radius: 50px; display: inline-block; }
+
+        /* --- COUNTDOWN --- */
+        .next-prayer {
+            background: #4ade80; color: #064e3b;
+            padding: 10px; border-radius: 10px;
+            margin-bottom: 30px; font-weight: bold;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.02); } 100% { transform: scale(1); } }
+
+        /* --- DAFTAR JADWAL --- */
+        .schedule-list { list-style: none; text-align: left; }
+        .schedule-item {
+            display: flex; justify-content: space-between;
+            padding: 12px 15px;
+            margin-bottom: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            transition: 0.3s;
+            border-left: 3px solid transparent;
+        }
+        .schedule-item:hover { background: rgba(255, 255, 255, 0.15); }
+        
+        /* Highlight Sholat Berikutnya */
+        .schedule-item.active {
+            background: linear-gradient(90deg, #4ade80 0%, #22c55e 100%);
+            color: #064e3b;
+            border-left: 3px solid #fff;
+            font-weight: bold;
+            transform: scale(1.02);
+            box-shadow: 0 5px 15px rgba(34, 197, 94, 0.3);
+        }
+
+        /* --- FOOTER --- */
+        .footer { margin-top: 30px; font-size: 12px; color: #888; }
+
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Jadwal Sholat</h1>
+        <div class="location">
+            <span>📍</span> <span id="lokasi-txt">Mendeteksi Lokasi...</span>
+        </div>
+
+        <div class="realtime-clock" id="jam">00:00</div>
+        <div class="date-box" id="tanggal">Memuat Tanggal...</div>
+
+        <div class="next-prayer" id="countdown-box">
+            -- : -- : --
+        </div>
+
+        <ul class="schedule-list" id="jadwal-list">
+            <li class="schedule-item"><span>Subuh</span> <span id="subuh">--:--</span></li>
+            <li class="schedule-item"><span>Dzuhur</span> <span id="dzuhur">--:--</span></li>
+            <li class="schedule-item"><span>Ashar</span> <span id="ashar">--:--</span></li>
+            <li class="schedule-item"><span>Maghrib</span> <span id="maghrib">--:--</span></li>
+            <li class="schedule-item"><span>Isya</span> <span id="isya">--:--</span></li>
+        </ul>
+
+        <div class="footer">
+            &copy; 2025 Sarid Syahrinal Project.
+        </div>
+    </div>
+
+    <script>
+        // --- 1. JAM DIGITAL ---
+        function updateClock() {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+            document.getElementById('jam').innerText = timeString;
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // --- 2. AMBIL LOKASI & JADWAL ---
+        function getLocation() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(getJadwal, showError);
+            } else {
+                document.getElementById('lokasi-txt').innerText = "GPS tidak didukung";
+                getJadwalManual(); // Fallback ke Bandung
+            }
+        }
+
+        function showError(error) {
+            document.getElementById('lokasi-txt').innerText = "Lokasi dimatikan (Default: Bandung)";
+            getJadwalManual(); // Fallback ke Bandung
+        }
+
+        // Ambil Jadwal berdasarkan GPS
+        async function getJadwal(position) {
+            const lat = position.coords.latitude;
+            const long = position.coords.longitude;
+            
+            // API Aladhan (Method 20 = Kemenag RI)
+            const url = `https://api.aladhan.com/v1/timings?latitude=${lat}&longitude=${long}&method=20`;
+            
+            try {
+                document.getElementById('lokasi-txt').innerText = "Lokasi Terdeteksi";
+                const response = await fetch(url);
+                const data = await response.json();
+                tampilkanData(data.data);
+            } catch (error) {
+                document.getElementById('lokasi-txt').innerText = "Gagal memuat data";
+            }
+        }
+
+        // Fallback Default (Bandung)
+        async function getJadwalManual() {
+            // Koordinat Bandung
+            const lat = -6.9175;
+            const long = 107.6191;
+            const url = `https://api.aladhan.com/v1/timings?latitude=${lat}&longitude=${long}&method=20`;
+            
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+                tampilkanData(data.data);
+            } catch (error) {
+                console.log(error);
+            }
+        }
+
+        // --- 3. TAMPILKAN DATA KE LAYAR ---
+        function tampilkanData(data) {
+            const jadwal = data.timings;
+            const date = data.date;
+
+            // Update Tanggal
+            document.getElementById('tanggal').innerText = `${date.gregorian.weekday.en}, ${date.readable} / ${date.hijri.day} ${date.hijri.month.en} ${date.hijri.year}`;
+
+            // Update Jam Sholat
+            document.getElementById('subuh').innerText = jadwal.Fajr;
+            document.getElementById('dzuhur').innerText = jadwal.Dhuhr;
+            document.getElementById('ashar').innerText = jadwal.Asr;
+            document.getElementById('maghrib').innerText = jadwal.Maghrib;
+            document.getElementById('isya').innerText = jadwal.Isha;
+
+            // Cek Sholat Berikutnya
+            cekSholatBerikutnya(jadwal);
+        }
+
+        function cekSholatBerikutnya(jadwal) {
+            const waktuSholat = {
+                "Subuh": jadwal.Fajr,
+                "Dzuhur": jadwal.Dhuhr,
+                "Ashar": jadwal.Asr,
+                "Maghrib": jadwal.Maghrib,
+                "Isya": jadwal.Isha
+            };
+
+            const now = new Date();
+            const currentHour = now.getHours();
+            const currentMin = now.getMinutes();
+            const currentTimeVal = currentHour * 60 + currentMin;
+
+            let nextPrayerName = "Subuh (Besok)";
+            let nextPrayerTime = "";
+            let found = false;
+
+            // Loop cari sholat selanjutnya
+            for (const [name, time] of Object.entries(waktuSholat)) {
+                const [h, m] = time.split(':').map(Number);
+                const prayerTimeVal = h * 60 + m;
+
+                if (prayerTimeVal > currentTimeVal) {
+                    nextPrayerName = name;
+                    nextPrayerTime = time;
+                    
+                    // Highlight di List
+                    highlightList(name);
+                    found = true;
+                    break;
+                }
+            }
+
+            if (!found) {
+                // Kalau sudah lewat Isya, berarti next Subuh
+                nextPrayerTime = jadwal.Fajr;
+                highlightList("Subuh");
+            }
+
+            document.getElementById('countdown-box').innerHTML = `Menuju ${nextPrayerName} <br> ${nextPrayerTime}`;
+        }
+
+        function highlightList(name) {
+            // Reset semua
+            document.querySelectorAll('.schedule-item').forEach(el => el.classList.remove('active'));
+            
+            // Aktifkan yang sesuai
+            const idMap = {
+                "Subuh": "subuh", "Dzuhur": "dzuhur", "Ashar": "ashar", 
+                "Maghrib": "maghrib", "Isya": "isya"
+            };
+            const elId = idMap[name];
+            if(elId) document.getElementById(elId).parentElement.classList.add('active');
+        }
+
+        // Jalankan saat load
+        getLocation();
+
+    </script>
+</body>
+</html>
